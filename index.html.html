@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Break Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sage: #3cbd7a;
+    --sage-light: rgba(60,189,122,0.4);
+    --sage-pale: rgba(60,189,122,0.4);
+    --sage-faint: rgba(60,189,122,0.4);
+    --cream: #eef4f5;
+    --warm-gray: #4a7080;
+    --text: #002633;
+    --break-accent: #1a6b80;
+    --break-pale: #deeaed;
+    --break-faint: #eef4f5;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+    outline: none;
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.2s;
+    cursor: text;
+  }
+  h1:hover { border-bottom-color: var(--sage-pale); }
+  h1:focus  { border-bottom-color: var(--sage-light); }
+
+  .subtitle {
+    font-size: 0.9rem;
+    color: var(--warm-gray);
+    font-weight: 400;
+    margin-bottom: 3rem;
+    letter-spacing: 0.02em;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 24px;
+    padding: 2.5rem 3rem;
+    width: 100%;
+    max-width: 580px;
+    box-shadow: 0 2px 40px rgba(74,124,111,0.10), 0 1px 4px rgba(74,124,111,0.06);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--sage);
+    transition: background 0.6s ease;
+  }
+
+  .timers-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2.5rem;
+    min-height: 210px;
+  }
+
+  .timer-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .break-block {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: max-width 0.55s cubic-bezier(0.4,0,0.2,1),
+                opacity 0.4s ease 0.15s;
+  }
+
+  .break-block.visible {
+    max-width: 220px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .break-block-inner {
+    padding-left: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .divider {
+    width: 1px;
+    height: 110px;
+    background: var(--sage-pale);
+    flex-shrink: 0;
+    opacity: 0;
+    align-self: center;
+    transition: opacity 0.4s ease 0.3s;
+  }
+  .divider.visible { opacity: 1; }
+
+  .ring-wrap {
+    position: relative;
+  }
+  .ring-wrap.large { width: 160px; height: 160px; }
+  .ring-wrap.small { width: 120px; height: 120px; }
+
+  .ring-svg {
+    transform: rotate(-90deg);
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  .ring-track { fill: none; stroke-width: 5; }
+  .work-track  { stroke: var(--sage-faint); }
+  .break-track { stroke: var(--break-faint); }
+
+  .ring-progress {
+    fill: none;
+    stroke-width: 5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+  }
+  .work-progress  { stroke: var(--sage); }
+  .break-progress { stroke: var(--break-accent); }
+
+  .timer-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+  }
+
+  .timer-display {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    line-height: 1;
+    letter-spacing: -1.5px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .timer-display.large { font-size: 2.4rem; }
+  .timer-display.small { font-size: 1.7rem; }
+
+  .timer-label {
+    font-size: 0.63rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .timer-label.sage   { color: var(--sage); }
+  .timer-label.orange { color: var(--break-accent); }
+
+  .block-heading {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+  .block-heading.sage   { color: var(--sage-light); }
+  .block-heading.orange { color: var(--break-accent); opacity: 0.8; }
+
+  @keyframes breathe {
+    0%, 100% { transform: scale(1) rotate(-90deg); }
+    50%       { transform: scale(1.05) rotate(-90deg); }
+  }
+  .break-breathe { animation: breathe 4s ease-in-out infinite; }
+
+  .controls-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 2rem;
+    align-items: center;
+  }
+  .interval-wrap { flex: 1; }
+  .interval-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--warm-gray);
+    margin-bottom: 8px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .interval-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  input[type="range"] {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--sage-pale);
+    outline: none;
+    border: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    background: var(--sage);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  .interval-value {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    min-width: 48px;
+    text-align: right;
+    color: var(--sage);
+  }
+  .interval-unit { font-size: 0.78rem; color: var(--warm-gray); font-weight: 400; }
+
+  .btn-row { display: flex; gap: 10px; justify-content: center; }
+  .btn {
+    padding: 0.65rem 1.8rem;
+    border: none;
+    border-radius: 100px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.12s, opacity 0.12s;
+    letter-spacing: 0.01em;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--sage); color: white; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-secondary { background: var(--sage); color: white; }
+  .btn-secondary:hover { background: var(--sage); opacity: 0.88; }
+
+  .status-bar {
+    margin-top: 1.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--sage-faint);
+    border-radius: 12px;
+    font-size: 0.84rem;
+    color: var(--warm-gray);
+    text-align: center;
+    line-height: 1.4;
+    transition: background 0.4s, color 0.4s;
+  }
+  .status-bar.alert { background: var(--break-pale); color: var(--break-accent); font-weight: 600; }
+
+  .repeat-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 1.5rem;
+  }
+  .repeat-question {
+    font-size: 0.88rem;
+    color: var(--warm-gray);
+    margin-bottom: 2px;
+  }
+  .repeat-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .notif-btn {
+    background: none;
+    border: 1px dashed var(--sage-pale);
+    color: var(--warm-gray);
+    padding: 0.4rem 0.9rem;
+    border-radius: 100px;
+    font-size: 0.78rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    cursor: pointer;
+    margin-top: 0.75rem;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .notif-btn:hover { border-color: var(--sage-light); color: var(--sage); }
+  .notif-granted   { color: var(--sage); border-color: var(--sage-pale); }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1 contenteditable="true" id="main-title" spellcheck="false" title="Click to edit">Breathe.</h1>
+<p class="subtitle">gentle reminders to step away</p>
+
+<div class="card" id="card">
+
+  <div class="timers-row">
+
+    <!-- Work timer -->
+    <div class="timer-block">
+      <div class="block-heading sage">work</div>
+      <div class="ring-wrap large">
+        <svg class="ring-svg" width="160" height="160" viewBox="0 0 160 160">
+          <circle class="ring-track work-track" cx="80" cy="80" r="68"/>
+          <circle class="ring-progress work-progress" id="work-ring" cx="80" cy="80" r="68"/>
+        </svg>
+        <div class="timer-center">
+          <span class="timer-display large" id="work-display">25:00</span>
+          <span class="timer-label sage" id="work-label">until break</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider" id="divider"></div>
+
+    <!-- Break timer -->
+    <div class="timer-block break-block" id="break-block">
+      <div class="break-block-inner">
+        <div class="block-heading orange">break</div>
+        <div class="ring-wrap small">
+          <svg class="ring-svg" width="120" height="120" viewBox="0 0 120 120" id="break-ring-svg">
+            <circle class="ring-track break-track" cx="60" cy="60" r="50"/>
+            <circle class="ring-progress break-progress" id="break-ring" cx="60" cy="60" r="50"/>
+          </svg>
+          <div class="timer-center">
+            <span class="timer-display small" id="break-display">05:00</span>
+            <span class="timer-label orange">remaining</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="controls-row">
+    <div class="interval-wrap">
+      <div class="interval-label">work interval</div>
+      <div class="interval-input-row">
+        <input type="range" id="interval-slider" min="1" max="60" step="1" value="25">
+        <div>
+          <span class="interval-value" id="interval-display">25</span>
+          <span class="interval-unit"> min</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-row" id="break-controls-row">
+    <div class="interval-wrap">
+      <div class="interval-label">break duration</div>
+      <div class="interval-input-row">
+        <input type="range" id="break-slider" min="1" max="30" step="1" value="5">
+        <div>
+          <span class="interval-value" id="break-interval-display">5</span>
+          <span class="interval-unit"> min</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" id="start-btn" onclick="startTimer()">Start</button>
+    <button class="btn btn-secondary hidden" id="pause-btn" onclick="pauseTimer()">Pause</button>
+    <button class="btn btn-secondary hidden" id="reset-btn" onclick="resetTimer()">Reset</button>
+  </div>
+
+  <div class="status-bar" id="status-bar">Set your interval above and press start.</div>
+
+  <div class="repeat-row hidden" id="repeat-row">
+    <span class="repeat-question">Go again?</span>
+    <div class="repeat-btns">
+      <button class="btn btn-primary" onclick="repeatTimer()">Repeat <span id="repeat-label">25</span> min</button>
+      <button class="btn btn-secondary" onclick="pickNew()">Pick new amount</button>
+    </div>
+  </div>
+
+  <div style="text-align:center">
+    <button class="notif-btn" id="notif-btn" onclick="requestNotifications()">🔔 Enable notifications</button>
+  </div>
+</div>
+
+<script>
+  const WORK_C  = 2 * Math.PI * 68;
+  const BREAK_C = 2 * Math.PI * 50;
+
+  document.getElementById('main-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+  });
+
+  const workRing     = document.getElementById('work-ring');
+  const breakRing    = document.getElementById('break-ring');
+  const workDisplay  = document.getElementById('work-display');
+  const breakDisplay = document.getElementById('break-display');
+  const workLabel    = document.getElementById('work-label');
+  const statusBar    = document.getElementById('status-bar');
+  const startBtn     = document.getElementById('start-btn');
+  const pauseBtn     = document.getElementById('pause-btn');
+  const resetBtn     = document.getElementById('reset-btn');
+  const slider       = document.getElementById('interval-slider');
+  const intervalDisp = document.getElementById('interval-display');
+  const notifBtn     = document.getElementById('notif-btn');
+  const breakBlock   = document.getElementById('break-block');
+  const divider      = document.getElementById('divider');
+  const breakRingSvg = document.getElementById('break-ring-svg');
+
+  workRing.setAttribute('stroke-dasharray', WORK_C);
+  workRing.setAttribute('stroke-dashoffset', '0');
+  breakRing.setAttribute('stroke-dasharray', BREAK_C);
+  breakRing.setAttribute('stroke-dashoffset', '0');
+
+  let workMinutes  = 25;
+  let workTotal    = workMinutes * 60;
+  let workLeft     = workTotal;
+  let breakMinutes = 5;
+  let BREAK_TOTAL  = breakMinutes * 60;
+  let breakLeft    = BREAK_TOTAL;
+  let breakActive = false;
+  let running     = false;
+  let ticker      = null;
+  let notifOn     = false;
+
+  const breakSlider     = document.getElementById('break-slider');
+  const breakIntervalDisp = document.getElementById('break-interval-display');
+
+  slider.addEventListener('input', () => {
+    workMinutes = parseInt(slider.value);
+    intervalDisp.textContent = workMinutes;
+    if (!running) {
+      workTotal = workMinutes * 60;
+      workLeft  = workTotal;
+      updateWork();
+    }
+  });
+
+  breakSlider.addEventListener('input', () => {
+    breakMinutes = parseInt(breakSlider.value);
+    breakIntervalDisp.textContent = breakMinutes;
+    if (!running) {
+      BREAK_TOTAL = breakMinutes * 60;
+      breakLeft   = BREAK_TOTAL;
+      updateBreak();
+    }
+  });
+
+  function fmt(s) {
+    return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+  }
+
+  function updateWork() {
+    workDisplay.textContent = fmt(workLeft);
+    workRing.setAttribute('stroke-dashoffset', WORK_C * (1 - workLeft / workTotal));
+  }
+
+  function updateBreak() {
+    breakDisplay.textContent = fmt(breakLeft);
+    breakRing.setAttribute('stroke-dashoffset', BREAK_C * (1 - breakLeft / BREAK_TOTAL));
+  }
+
+  function showBreakTimer() {
+    breakBlock.classList.add('visible');
+    divider.classList.add('visible');
+    breakRingSvg.classList.add('break-breathe');
+  }
+
+  function hideBreakTimer() {
+    breakBlock.classList.remove('visible');
+    divider.classList.remove('visible');
+    breakRingSvg.classList.remove('break-breathe');
+    breakLeft = BREAK_TOTAL;
+    updateBreak();
+  }
+
+  function startTimer() {
+    running = true;
+    startBtn.classList.add('hidden');
+    pauseBtn.classList.remove('hidden');
+    resetBtn.classList.remove('hidden');
+    document.querySelector('.controls-row').classList.add('hidden');
+    document.getElementById('break-controls-row').classList.add('hidden');
+    slider.disabled = true;
+    workLabel.textContent = 'until break';
+    statusBar.classList.remove('alert');
+    statusBar.textContent = `Working for ${workMinutes} min — break coming up.`;
+    runWork();
+  }
+
+  function runWork() {
+    breakActive = false;
+    ticker = setInterval(() => {
+      workLeft--;
+      updateWork();
+      if (workLeft <= 0) { clearInterval(ticker); beginBreak(); }
+    }, 1000);
+  }
+
+  function beginBreak() {
+    breakActive = true;
+    breakLeft = BREAK_TOTAL;
+    updateBreak();
+    showBreakTimer();
+    workLabel.textContent = 'done ✓';
+    statusBar.classList.add('alert');
+    statusBar.textContent = '🌿 Time to rest! Step away from your screen.';
+
+    if (notifOn && Notification.permission === 'granted') {
+      new Notification('Time for a break! 🌿', {
+        body: `You've been working hard. Rest your eyes for ${breakMinutes} minutes.`
+      });
+    }
+
+    ticker = setInterval(() => {
+      breakLeft--;
+      updateBreak();
+      if (breakLeft <= 0) { clearInterval(ticker); endBreak(); }
+    }, 1000);
+  }
+
+  function endBreak() {
+    hideBreakTimer();
+    breakActive = false;
+    running = false;
+    workTotal = workMinutes * 60;
+    workLeft  = workTotal;
+    updateWork();
+    workLabel.textContent = 'until break';
+    statusBar.classList.remove('alert');
+    statusBar.classList.add('hidden');
+    pauseBtn.classList.add('hidden');
+    resetBtn.classList.add('hidden');
+
+    document.getElementById('repeat-label').textContent = workMinutes;
+    document.getElementById('repeat-row').classList.remove('hidden');
+
+    if (notifOn && Notification.permission === 'granted') {
+      new Notification('Break over!', { body: 'Ready to go again?' });
+    }
+  }
+
+  function repeatTimer() {
+    document.getElementById('repeat-row').classList.add('hidden');
+    statusBar.classList.remove('hidden');
+    startTimer();
+  }
+
+  function pickNew() {
+    document.getElementById('repeat-row').classList.add('hidden');
+    statusBar.classList.remove('hidden');
+    statusBar.textContent = 'Set your interval above and press start.';
+    document.querySelector('.controls-row').classList.remove('hidden');
+    startBtn.classList.remove('hidden');
+    slider.disabled = false;
+    workTotal = workMinutes * 60;
+    workLeft  = workTotal;
+    updateWork();
+  }
+
+  function pauseTimer() {
+    clearInterval(ticker);
+    running = false;
+    pauseBtn.textContent = 'Resume';
+    pauseBtn.onclick = resumeTimer;
+    statusBar.classList.remove('alert');
+    statusBar.textContent = 'Paused.';
+    if (breakActive) breakRingSvg.classList.remove('break-breathe');
+  }
+
+  function resumeTimer() {
+    running = true;
+    pauseBtn.textContent = 'Pause';
+    pauseBtn.onclick = pauseTimer;
+    if (breakActive) {
+      statusBar.classList.add('alert');
+      statusBar.textContent = '🌿 Break time — step away!';
+      breakRingSvg.classList.add('break-breathe');
+      ticker = setInterval(() => {
+        breakLeft--;
+        updateBreak();
+        if (breakLeft <= 0) { clearInterval(ticker); endBreak(); }
+      }, 1000);
+    } else {
+      statusBar.textContent = `Working for ${workMinutes} min.`;
+      ticker = setInterval(() => {
+        workLeft--;
+        updateWork();
+        if (workLeft <= 0) { clearInterval(ticker); beginBreak(); }
+      }, 1000);
+    }
+  }
+
+  function resetTimer() {
+    clearInterval(ticker);
+    running = false;
+    breakActive = false;
+    workMinutes = parseInt(slider.value);
+    workTotal = workMinutes * 60;
+    workLeft  = workTotal;
+    breakLeft = BREAK_TOTAL;
+    hideBreakTimer();
+    updateWork();
+    updateBreak();
+    workLabel.textContent = 'until break';
+    document.getElementById('repeat-row').classList.add('hidden');
+    statusBar.classList.remove('hidden');
+    statusBar.classList.remove('alert');
+    statusBar.textContent = 'Set your interval above and press start.';
+    startBtn.classList.remove('hidden');
+    pauseBtn.classList.add('hidden');
+    pauseBtn.textContent = 'Pause';
+    pauseBtn.onclick = pauseTimer;
+    resetBtn.classList.add('hidden');
+    document.querySelector('.controls-row').classList.remove('hidden');
+    document.getElementById('break-controls-row').classList.remove('hidden');
+    slider.disabled = false;
+  }
+
+  function requestNotifications() {
+    if (!('Notification' in window)) { notifBtn.textContent = 'Not supported'; return; }
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') {
+        notifOn = true;
+        notifBtn.textContent = '✓ Notifications on';
+        notifBtn.classList.add('notif-granted');
+        notifBtn.onclick = null;
+      } else {
+        notifBtn.textContent = 'Permission denied';
+      }
+    });
+  }
+
+  if (Notification.permission === 'granted') {
+    notifOn = true;
+    notifBtn.textContent = '✓ Notifications on';
+    notifBtn.classList.add('notif-granted');
+  }
+
+  updateWork();
+  updateBreak();
+</script>
+</body>
+</html>
