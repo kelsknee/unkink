@@ -402,6 +402,7 @@
 
   <div style="text-align:center">
     <button class="notif-btn" id="notif-btn" onclick="requestNotifications()">🔔 Enable notifications</button>
+    <button class="notif-btn" id="pip-btn" onclick="popOut()">⧉ Pop out timer</button>
   </div>
 </div>
 
@@ -475,11 +476,17 @@
   function updateWork() {
     workDisplay.textContent = fmt(workLeft);
     workRing.setAttribute('stroke-dashoffset', WORK_C * (1 - workLeft / workTotal));
+    if (pipWorkDisplay) pipWorkDisplay.textContent = fmt(workLeft);
   }
 
   function updateBreak() {
     breakDisplay.textContent = fmt(breakLeft);
     breakRing.setAttribute('stroke-dashoffset', BREAK_C * (1 - breakLeft / BREAK_TOTAL));
+    if (pipBreakDisplay) {
+      pipBreakDisplay.textContent = fmt(breakLeft);
+      pipBreakDisplay.style.display = '';
+      if (pipBreakLabel) pipBreakLabel.style.display = '';
+    }
   }
 
   function showBreakTimer() {
@@ -494,6 +501,7 @@
     breakRingSvg.classList.remove('break-breathe');
     breakLeft = BREAK_TOTAL;
     updateBreak();
+    if (pipBreakDisplay) { pipBreakDisplay.style.display = 'none'; pipBreakLabel.style.display = 'none'; }
   }
 
   function startTimer() {
@@ -527,10 +535,11 @@
     workLabel.textContent = 'done ✓';
     statusBar.classList.add('alert');
     statusBar.textContent = '🌿 Time to rest! Step away from your screen.';
+    if (pipBreakDisplay) { pipBreakDisplay.style.display = ''; pipBreakLabel.style.display = ''; }
 
     if (notifOn && Notification.permission === 'granted') {
       new Notification('Time for a break! 🌿', {
-        body: `You've been working hard. Move your body for ${breakMinutes} minutes.`
+        body: `You've been working hard. Rest your eyes for ${breakMinutes} minutes.`
       });
     }
 
@@ -661,6 +670,106 @@
 
   updateWork();
   updateBreak();
+
+  // Picture-in-Picture
+  let pipWorkDisplay = null;
+  let pipBreakDisplay = null;
+  let pipBreakLabel = null;
+
+  async function popOut() {
+    if (!('documentPictureInPicture' in window)) {
+      alert('Pop-out requires Chrome 116+ or Edge. Try updating your browser.');
+      return;
+    }
+
+    const pipWin = await documentPictureInPicture.requestWindow({ width: 260, height: 200 });
+
+    // Copy font
+    const font = pipWin.document.createElement('link');
+    font.rel = 'stylesheet';
+    font.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap';
+    pipWin.document.head.appendChild(font);
+
+    // Styles
+    const style = pipWin.document.createElement('style');
+    style.textContent = `
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --sage: #3cbd7a;
+        --break-accent: #1a6b80;
+        --text: #002633;
+        --warm-gray: #4a7080;
+      }
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background: #eef4f5;
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 4px;
+      }
+      .pip-phase {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--warm-gray);
+      }
+      .pip-phase.break { color: var(--break-accent); }
+      .pip-time {
+        font-size: 3.2rem;
+        font-weight: 700;
+        letter-spacing: -2px;
+        line-height: 1;
+        color: var(--text);
+      }
+      .pip-sub {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--sage);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-top: 2px;
+      }
+      .pip-sub.break { color: var(--break-accent); }
+    `;
+    pipWin.document.head.appendChild(style);
+
+    // Markup
+    pipWin.document.body.innerHTML = `
+      <span class="pip-phase" id="pip-phase">work</span>
+      <span class="pip-time" id="pip-work">${fmt(workLeft)}</span>
+      <span class="pip-sub" id="pip-work-label">until break</span>
+      <span class="pip-time pip-sub break" id="pip-break" style="display:none; font-size:1.8rem; margin-top:8px;">${fmt(breakLeft)}</span>
+      <span class="pip-sub break" id="pip-break-label" style="display:none;">break remaining</span>
+    `;
+
+    pipWorkDisplay  = pipWin.document.getElementById('pip-work');
+    pipBreakDisplay = pipWin.document.getElementById('pip-break');
+    pipBreakLabel   = pipWin.document.getElementById('pip-break-label');
+
+    // If break is already active, show it
+    if (breakActive) {
+      pipBreakDisplay.style.display = '';
+      pipBreakLabel.style.display = '';
+      pipWin.document.getElementById('pip-phase').textContent = 'break';
+      pipWin.document.getElementById('pip-phase').classList.add('break');
+      pipWin.document.getElementById('pip-work-label').textContent = 'done ✓';
+    }
+
+    // Clean up refs when PiP closes
+    pipWin.addEventListener('pagehide', () => {
+      pipWorkDisplay = null;
+      pipBreakDisplay = null;
+      pipBreakLabel = null;
+      document.getElementById('pip-btn').textContent = '⧉ Pop out timer';
+    });
+
+    document.getElementById('pip-btn').textContent = '✓ Popped out';
+  }
 </script>
 </body>
 </html>
