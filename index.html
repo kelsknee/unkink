@@ -476,17 +476,11 @@
   function updateWork() {
     workDisplay.textContent = fmt(workLeft);
     workRing.setAttribute('stroke-dashoffset', WORK_C * (1 - workLeft / workTotal));
-    if (pipWorkDisplay) pipWorkDisplay.textContent = fmt(workLeft);
   }
 
   function updateBreak() {
     breakDisplay.textContent = fmt(breakLeft);
     breakRing.setAttribute('stroke-dashoffset', BREAK_C * (1 - breakLeft / BREAK_TOTAL));
-    if (pipBreakDisplay) {
-      pipBreakDisplay.textContent = fmt(breakLeft);
-      pipBreakDisplay.style.display = '';
-      if (pipBreakLabel) pipBreakLabel.style.display = '';
-    }
   }
 
   function showBreakTimer() {
@@ -501,7 +495,6 @@
     breakRingSvg.classList.remove('break-breathe');
     breakLeft = BREAK_TOTAL;
     updateBreak();
-    if (pipBreakDisplay) { pipBreakDisplay.style.display = 'none'; pipBreakLabel.style.display = 'none'; }
   }
 
   function startTimer() {
@@ -535,7 +528,6 @@
     workLabel.textContent = 'done ✓';
     statusBar.classList.add('alert');
     statusBar.textContent = '🌿 Time to rest! Step away from your screen.';
-    if (pipBreakDisplay) { pipBreakDisplay.style.display = ''; pipBreakLabel.style.display = ''; }
 
     if (notifOn && Notification.permission === 'granted') {
       new Notification('Time for a break! 🌿', {
@@ -672,9 +664,8 @@
   updateBreak();
 
   // Picture-in-Picture
-  let pipWorkDisplay = null;
-  let pipBreakDisplay = null;
-  let pipBreakLabel = null;
+  let pipWinRef = null;
+  let pipTicker = null;
 
   async function popOut() {
     if (!('documentPictureInPicture' in window)) {
@@ -683,23 +674,17 @@
     }
 
     const pipWin = await documentPictureInPicture.requestWindow({ width: 260, height: 200 });
+    pipWinRef = pipWin;
 
-    // Copy font
     const font = pipWin.document.createElement('link');
     font.rel = 'stylesheet';
     font.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap';
     pipWin.document.head.appendChild(font);
 
-    // Styles
     const style = pipWin.document.createElement('style');
     style.textContent = `
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      :root {
-        --sage: #3cbd7a;
-        --break-accent: #1a6b80;
-        --text: #002633;
-        --warm-gray: #4a7080;
-      }
+      :root { --sage: #3cbd7a; --break-accent: #1a6b80; --text: #002633; --warm-gray: #4a7080; }
       body {
         font-family: 'Plus Jakarta Sans', sans-serif;
         background: #eef4f5;
@@ -711,60 +696,44 @@
         height: 100vh;
         gap: 4px;
       }
-      .pip-phase {
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--warm-gray);
-      }
+      .pip-phase { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--warm-gray); }
       .pip-phase.break { color: var(--break-accent); }
-      .pip-time {
-        font-size: 3.2rem;
-        font-weight: 700;
-        letter-spacing: -2px;
-        line-height: 1;
-        color: var(--text);
-      }
-      .pip-sub {
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: var(--sage);
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        margin-top: 2px;
-      }
-      .pip-sub.break { color: var(--break-accent); }
+      .pip-time { font-size: 3.2rem; font-weight: 700; letter-spacing: -2px; line-height: 1; color: var(--text); }
+      .pip-sub { font-size: 0.72rem; font-weight: 600; color: var(--sage); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
+      .pip-break-time { font-size: 1.8rem; font-weight: 700; letter-spacing: -1px; color: var(--break-accent); margin-top: 6px; }
+      .pip-break-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--break-accent); opacity: 0.8; }
     `;
     pipWin.document.head.appendChild(style);
 
-    // Markup
     pipWin.document.body.innerHTML = `
       <span class="pip-phase" id="pip-phase">work</span>
-      <span class="pip-time" id="pip-work">${fmt(workLeft)}</span>
+      <span class="pip-time" id="pip-work">--:--</span>
       <span class="pip-sub" id="pip-work-label">until break</span>
-      <span class="pip-time pip-sub break" id="pip-break" style="display:none; font-size:1.8rem; margin-top:8px;">${fmt(breakLeft)}</span>
-      <span class="pip-sub break" id="pip-break-label" style="display:none;">break remaining</span>
+      <span class="pip-break-time" id="pip-break" style="display:none">--:--</span>
+      <span class="pip-break-label" id="pip-break-label" style="display:none">break remaining</span>
     `;
 
-    pipWorkDisplay  = pipWin.document.getElementById('pip-work');
-    pipBreakDisplay = pipWin.document.getElementById('pip-break');
-    pipBreakLabel   = pipWin.document.getElementById('pip-break-label');
+    // Self-contained loop — reads directly from main timer state every 500ms
+    clearInterval(pipTicker);
+    pipTicker = setInterval(() => {
+      if (!pipWinRef) { clearInterval(pipTicker); return; }
+      try {
+        const d = pipWinRef.document;
+        d.getElementById('pip-work').textContent = fmt(workLeft);
+        d.getElementById('pip-phase').textContent = breakActive ? 'break' : 'work';
+        d.getElementById('pip-phase').className = 'pip-phase' + (breakActive ? ' break' : '');
+        d.getElementById('pip-work-label').textContent = breakActive ? 'done ✓' : 'until break';
+        const bTime  = d.getElementById('pip-break');
+        const bLabel = d.getElementById('pip-break-label');
+        bTime.textContent = fmt(breakLeft);
+        bTime.style.display  = breakActive ? '' : 'none';
+        bLabel.style.display = breakActive ? '' : 'none';
+      } catch(e) { clearInterval(pipTicker); }
+    }, 500);
 
-    // If break is already active, show it
-    if (breakActive) {
-      pipBreakDisplay.style.display = '';
-      pipBreakLabel.style.display = '';
-      pipWin.document.getElementById('pip-phase').textContent = 'break';
-      pipWin.document.getElementById('pip-phase').classList.add('break');
-      pipWin.document.getElementById('pip-work-label').textContent = 'done ✓';
-    }
-
-    // Clean up refs when PiP closes
     pipWin.addEventListener('pagehide', () => {
-      pipWorkDisplay = null;
-      pipBreakDisplay = null;
-      pipBreakLabel = null;
+      clearInterval(pipTicker);
+      pipWinRef = null;
       document.getElementById('pip-btn').textContent = '⧉ Pop out timer';
     });
 
