@@ -595,6 +595,7 @@
     running = true;
     pauseBtn.textContent = 'Pause';
     pauseBtn.onclick = pauseTimer;
+    resetBtn.textContent = 'Reset';
     if (breakActive) {
       statusBar.classList.add('alert');
       statusBar.textContent = '🌿 Break time — step away!';
@@ -615,6 +616,16 @@
   }
 
   function resetTimer() {
+    if (running) {
+      // First press: pause and warn
+      pauseTimer();
+      resetBtn.textContent = 'Confirm Reset';
+      statusBar.classList.remove('alert');
+      statusBar.textContent = 'Paused. Hit Reset again to fully reset.';
+      return;
+    }
+
+    // Second press (or already paused): fully reset
     clearInterval(ticker);
     running = false;
     breakActive = false;
@@ -634,6 +645,7 @@
     pauseBtn.classList.add('hidden');
     pauseBtn.textContent = 'Pause';
     pauseBtn.onclick = pauseTimer;
+    resetBtn.textContent = 'Reset';
     resetBtn.classList.add('hidden');
     document.querySelector('.controls-row').classList.remove('hidden');
     document.getElementById('break-controls-row').classList.remove('hidden');
@@ -702,6 +714,21 @@
       .pip-sub { font-size: 0.72rem; font-weight: 600; color: var(--sage); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
       .pip-break-time { font-size: 1.8rem; font-weight: 700; letter-spacing: -1px; color: var(--break-accent); margin-top: 6px; }
       .pip-break-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--break-accent); opacity: 0.8; }
+      .pip-btns { display: flex; gap: 8px; margin-top: 12px; }
+      .pip-btn {
+        padding: 0.4rem 1rem;
+        border: none;
+        border-radius: 100px;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        background: #3cbd7a;
+        color: white;
+        transition: opacity 0.15s;
+      }
+      .pip-btn:hover { opacity: 0.85; }
+      .pip-btn.secondary { background: rgba(60,189,122,0.25); color: #002633; }
     `;
     pipWin.document.head.appendChild(style);
 
@@ -711,7 +738,25 @@
       <span class="pip-sub" id="pip-work-label">until break</span>
       <span class="pip-break-time" id="pip-break" style="display:none">--:--</span>
       <span class="pip-break-label" id="pip-break-label" style="display:none">break remaining</span>
+      <div class="pip-btns">
+        <button class="pip-btn" id="pip-pause-btn">Pause</button>
+        <button class="pip-btn secondary" id="pip-reset-btn">Reset</button>
+      </div>
     `;
+
+    // Wire PiP buttons to main window functions
+    pipWin.document.getElementById('pip-pause-btn').addEventListener('click', () => {
+      if (!running && !breakActive && workLeft === workTotal) {
+        startTimer();
+      } else if (running) {
+        pauseTimer();
+      } else {
+        resumeTimer();
+      }
+    });
+    pipWin.document.getElementById('pip-reset-btn').addEventListener('click', () => {
+      resetTimer();
+    });
 
     // Self-contained loop — reads directly from main timer state every 500ms
     clearInterval(pipTicker);
@@ -728,6 +773,20 @@
         bTime.textContent = fmt(breakLeft);
         bTime.style.display  = breakActive ? '' : 'none';
         bLabel.style.display = breakActive ? '' : 'none';
+
+        // Sync pause/resume label
+        const pipPauseBtn = d.getElementById('pip-pause-btn');
+        const pipResetBtn = d.getElementById('pip-reset-btn');
+        if (pipPauseBtn) {
+          if (!running && !breakActive && workLeft === workTotal) {
+            pipPauseBtn.textContent = 'Start';
+          } else {
+            pipPauseBtn.textContent = running ? 'Pause' : 'Resume';
+          }
+        }
+        if (pipResetBtn) {
+          pipResetBtn.textContent = resetBtn.textContent; // mirrors "Reset" or "Confirm Reset"
+        }
       } catch(e) { clearInterval(pipTicker); }
     }, 500);
 
